@@ -284,14 +284,102 @@ stage_widar() {
     python scripts/visualize_widar_bvp.py
 }
 
+# --- chunk 11: Widar3.0 BVP preprocessing pipeline ---------------------------
+stage_bvp() {
+    banner "CHUNK 11 — Widar3.0 BVP preprocessing pipeline (bvp_pipeline_demo.py)"
+    # What: the model-ready pipeline over Widar3.0 BVP — composable transforms
+    #       (src/data/bvp_preprocess.py: normalize_bvp / pad_or_truncate /
+    #       augment_bvp) plus the PyTorch Dataset and the four canonical
+    #       cross-domain split helpers (src/data/widar_dataset.py: cross_user /
+    #       cross_position / cross_orientation / in_domain). Here we just render
+    #       the pipeline demo; chunk 12 trains/visualizes on these splits.
+    #       Requires data/raw/widar3/bvp/ (see chunk 10).
+    # Out:  figures/bvp_pipeline_demo.png (raw -> normalized -> padded, with the
+    #       per-frame energy-centroid motion trajectory overlaid).
+    # 13. python scripts/bvp_pipeline_demo.py
+    python scripts/bvp_pipeline_demo.py
+}
+
+# --- chunk 12: train the BVP CNN-RNN, one model per split (HEAVY) -------------
+stage_train_widar() {
+    banner "CHUNK 12 — train BVP CNN-RNN over the 4 cross-domain splits (src/train_widar.py)"
+    # Variables ---------------------------------------------------------------
+    local TW_EPOCHS=40        # max epochs per split (early stopping may stop sooner)
+    local TW_BATCH=64         # batch size
+    local TW_PATIENCE=8       # early-stop patience (epochs w/o val-acc gain)
+    local TW_HIDDEN=128       # GRU hidden units per direction
+    local TW_SEED=42          # RNG seed
+    # What: fits ONE bvp_cnn_rnn per split (in_domain / cross_user /
+    #       cross_position / cross_orientation), each on its own train partition,
+    #       early-stopping on a same-domain val carve. CPU-heavy over the full
+    #       ~43.7k corpus — scope it with --room / --max-per-gesture for a quick
+    #       pass (see docs/chunk12_spatial_visualization.md).
+    # Out:  runs/best_bvp_<split>.pt (x4) + runs/<ts>_<split>/{best.pt,metrics.json,
+    #       training_curves.png}.  Excluded from the no-arg default (heavy).
+    # Skip-if-exists: if all four stable checkpoints already exist, do nothing.
+    local missing=0
+    for s in in_domain cross_user cross_position cross_orientation; do
+        [ -f "runs/best_bvp_${s}.pt" ] || missing=1
+    done
+    if [ "$missing" = "0" ]; then
+        echo "All four runs/best_bvp_*.pt exist — skipping (delete one to retrain)."
+        return 0
+    fi
+    python src/train_widar.py \
+        --epochs "$TW_EPOCHS" --batch-size "$TW_BATCH" --patience "$TW_PATIENCE" \
+        --hidden "$TW_HIDDEN" --seed "$TW_SEED"
+}
+
+# --- chunk 12: evaluate every split + the 2x2 domain-results figure -----------
+stage_evaluate_widar() {
+    banner "CHUNK 12 — evaluate BVP across all four splits (src/evaluate_widar.py)"
+    # What: loads each runs/best_bvp_<split>.pt, rebuilds its held-out test set,
+    #       and scores it; assembles the 2x2 confusion-matrix figure. The BVP
+    #       environment-invariance test (compare vs chunk 9's domain-shift matrix).
+    #       Light if checkpoints exist; harmlessly no-ops if none do.
+    # Out:  figures/widar_domain_results.png, figures/widar/<split>_{metrics.json,
+    #       predictions.csv}.
+    # Skip-if-exists: skip when the results figure is already present.
+    if [ -f "figures/widar_domain_results.png" ]; then
+        echo "figures/widar_domain_results.png exists — skipping (delete to re-eval)."
+        return 0
+    fi
+    python src/evaluate_widar.py
+}
+
+# --- chunk 12: spatial-motion milestone figure -------------------------------
+stage_spatial() {
+    banner "CHUNK 12 — spatial-motion visualization (scripts/spatial_viz.py)"
+    # Variables ---------------------------------------------------------------
+    local SP_DPI=160       # output figure DPI
+    local SP_SEED=0        # which sample per gesture is drawn (deterministic)
+    # What: the tier-2 analog of chunk 6's 3-panel figure — for six gestures, a
+    #       BVP-frames strip over the velocity plane plus the integrated motion
+    #       trajectory, titled with predicted vs ground-truth (misses flagged).
+    #       Needs one runs/best_bvp_*.pt; skips cleanly if none exist yet.
+    # Out:  figures/spatial_motion.png
+    # Skip-if-exists: skip when the figure already exists.
+    if [ -f "figures/spatial_motion.png" ]; then
+        echo "figures/spatial_motion.png exists — skipping (delete to re-render)."
+        return 0
+    fi
+    if ! ls runs/best_bvp_*.pt >/dev/null 2>&1; then
+        echo "No runs/best_bvp_*.pt yet — run train_widar first; skipping."
+        return 0
+    fi
+    python scripts/spatial_viz.py --dpi "$SP_DPI" --seed "$SP_SEED"
+}
+
 # =============================================================================
 # DISPATCH
 # =============================================================================
 # Full ordered list (dependency order). Heavy/optional ones noted.
-ALL_STAGES=(verify explore preprocess visualize train sweep evaluate capture finalviz diagnose postprocess preprocess_ntu train_ntu domainshift widar)
+ALL_STAGES=(verify explore preprocess visualize train sweep evaluate capture finalviz diagnose postprocess preprocess_ntu train_ntu domainshift widar bvp train_widar evaluate_widar spatial)
 # What a no-arg run does: the safe reproduction using the EXISTING frozen
-# checkpoints — skips only train/sweep/train_ntu (heavy, overwrite-y).
-DEFAULT_STAGES=(verify explore preprocess visualize evaluate capture finalviz diagnose postprocess preprocess_ntu domainshift widar)
+# checkpoints — skips only the heavy, overwrite-y trainers (train/sweep/train_ntu/
+# train_widar).  evaluate_widar and spatial are default-safe: they self-skip when
+# their outputs exist and no-op cleanly when no BVP checkpoint has been trained.
+DEFAULT_STAGES=(verify explore preprocess visualize evaluate capture finalviz diagnose postprocess preprocess_ntu domainshift widar bvp evaluate_widar spatial)
 
 case "${1:-}" in
     list)

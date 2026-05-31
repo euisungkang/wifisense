@@ -21,15 +21,20 @@ wifi/
 │       └── widar3/              # Widar3.0 BVP (chunk 10, cross-domain gestures)
 │           └── bvp/BVP/         # <date>-VS/[6-link/]<userN>/*.mat (20x20xT)
 ├── src/
-│   ├── data/                    # loader.py, preprocess.py
-│   ├── models/                  # bilstm.py + build_model registry
+│   ├── data/                    # loader.py, preprocess.py, widar_loader.py,
+│   │                            #   bvp_preprocess.py, widar_dataset.py
+│   ├── models/                  # bilstm.py, bvp_cnn_rnn.py + build_model registry
 │   ├── viz/                     # csi_plots.py
-│   ├── train.py                 # training loop (run via `python -m src.train`)
-│   └── evaluate.py              # checkpoint evaluation (`python -m src.evaluate`)
+│   ├── train.py                 # UT-HAR/NTU training loop (`python -m src.train`)
+│   ├── train_widar.py           # Widar3.0 BVP per-split trainer (chunk 12)
+│   ├── evaluate.py              # checkpoint evaluation (`python -m src.evaluate`)
+│   └── evaluate_widar.py        # 4-split BVP eval + domain-results grid (chunk 12)
 ├── scripts/
 │   ├── explore_data.py          # dataset characterization + sample dumps
 │   ├── explore_widar.py         # Widar3.0 BVP characterization (chunk 10)
 │   ├── visualize_widar_bvp.py   # BVP example grid -> figures/widar_bvp_examples.png
+│   ├── bvp_pipeline_demo.py     # raw->normalized->padded + motion trajectory (chunk 11)
+│   ├── spatial_viz.py           # spatial-motion milestone figure (chunk 12)
 │   ├── preprocess_data.py       # raw -> data/processed/ut_har/ut_har.npz
 │   ├── visualize_classes.py     # per-class CSI sanity grids
 │   ├── sweep.py                 # multi-seed robustness sweep over one config
@@ -46,6 +51,29 @@ wifi/
 └── README.md
 ```
 
+## Project Documentation
+
+The project is built in numbered **chunks**; each leaves a focused write-up under
+[`docs/`](docs/). A reader landing here can follow the whole arc — raw-CSI
+activity recognition, the domain-shift problem, then the move to Widar3.0 BVP and
+environment-invariant gesture recognition — through these:
+
+| Chunk | Doc | What it covers |
+|---|---|---|
+| 1–6 | [`docs/pipeline.md`](docs/pipeline.md), [`docs/preprocessing.md`](docs/preprocessing.md), [`docs/visualization.md`](docs/visualization.md), [`docs/streaming_inference.md`](docs/streaming_inference.md) | UT-HAR data → preprocessing → BiLSTM training → the 3-panel continuous-capture figure |
+| 7 | [`docs/diagnostics.md`](docs/diagnostics.md) | Diagnosing the continuous-capture accuracy gap (model vs. boundary vs. edge effects) |
+| 8 | [`docs/chunk8_postprocessing.md`](docs/chunk8_postprocessing.md) | Temporal post-processing (moving average / majority vote / HMM) over the prediction stream |
+| 9 | [`docs/chunk9_domain_shift.md`](docs/chunk9_domain_shift.md) | UT-HAR ↔ NTU-Fi domain shift: raw-CSI models collapse across domains |
+| 10 | [`docs/chunk10_widar_bvp.md`](docs/chunk10_widar_bvp.md) | Widar3.0 BVP: the dataset, loader, and label conventions |
+| 11 | [`docs/chunk11_bvp_pipeline.md`](docs/chunk11_bvp_pipeline.md) | BVP preprocessing transforms, the `Dataset`, the four cross-domain splits, optional CSI→BVP derivation |
+| 12 | [`docs/chunk12_spatial_visualization.md`](docs/chunk12_spatial_visualization.md) | BVP CNN-RNN gesture model, cross-domain evaluation vs. chunk 9, and the spatial-motion figure |
+
+Supporting references: [`docs/datasets.md`](docs/datasets.md) /
+[`docs/data_summary.md`](docs/data_summary.md) (dataset details),
+[`docs/class_visual_separability.md`](docs/class_visual_separability.md), and the
+deeper notes under [`notes/`](notes/) (`widar_data.md`, `domain_shift.md`,
+`class_mapping.md`, …).
+
 ## Datasets
 
 | Dataset | Source | CSI Shape | Classes | Train | Test |
@@ -57,7 +85,9 @@ wifi/
 Widar3.0 (chunk 10) is a different kind of input: not raw CSI but **BVP
 (Body-coordinate Velocity Profile)** — an environment-invariant 2-D velocity
 representation. See [`docs/chunk10_widar_bvp.md`](docs/chunk10_widar_bvp.md) and
-[`notes/widar_data.md`](notes/widar_data.md).
+[`notes/widar_data.md`](notes/widar_data.md). The model-ready preprocessing
+pipeline, cross-domain splits, and the optional CSI→BVP re-derivation are
+documented in [`docs/chunk11_bvp_pipeline.md`](docs/chunk11_bvp_pipeline.md).
 
 ### Downloading the raw data
 
@@ -123,6 +153,31 @@ python scripts/visualize_widar_bvp.py      # figures/widar_bvp_examples.png
 # or: ./run_pipeline.sh widar
 ```
 
+The model-ready pipeline (chunk 11) lives in `src/data/bvp_preprocess.py`
+(`normalize_bvp` / `pad_or_truncate` / `augment_bvp`) and
+`src/data/widar_dataset.py` (`WidarBVPDataset` plus the four canonical
+cross-domain splits — `cross_user`, `cross_position`, `cross_orientation`,
+`in_domain` — each returning `(train_ds, test_ds)` with augmentation forced off
+on test):
+
+```python
+from src.data import cross_user, make_dataloader
+train_ds, test_ds = cross_user(test_users=[3], gesture="Push&Pull", augment=True)
+loader = make_dataloader(train_ds, batch_size=32)  # yields (B, T, 20, 20), labels
+```
+
+```bash
+python scripts/bvp_pipeline_demo.py        # figures/bvp_pipeline_demo.png
+# or: ./run_pipeline.sh bvp
+```
+
+Optionally, re-derive a BVP from raw CSI to verify the physics (chunk 11,
+educational — needs the toolkit's sample data shipped in `BVPExtractionCode`):
+
+```bash
+python -m src.data.csi_to_bvp             # figures/csi_to_bvp_check.png + metrics
+```
+
 ## Environment
 
 - **Conda env:** `wifisense` (Python 3.10)
@@ -139,9 +194,15 @@ python verify_setup.py
 
 `run_pipeline.sh` is an ordered runner for the whole chain (verify → explore →
 preprocess → visualize → train → sweep → evaluate → capture → finalviz →
-diagnose → postprocess → preprocess_ntu → train_ntu → domainshift). It activates
-the `wifisense` env itself. The tail (chunk 9) characterizes the UT-HAR ↔ NTU-Fi
-domain gap — see [`docs/chunk9_domain_shift.md`](docs/chunk9_domain_shift.md).
+diagnose → postprocess → preprocess_ntu → train_ntu → domainshift → widar → bvp →
+train_widar → evaluate_widar → spatial). It activates the `wifisense` env itself.
+The middle (chunk 9) characterizes the UT-HAR ↔ NTU-Fi domain gap
+([`docs/chunk9_domain_shift.md`](docs/chunk9_domain_shift.md)); the Widar3.0 tail
+(chunks 10–12) moves to environment-invariant BVP gesture recognition
+([`docs/chunk12_spatial_visualization.md`](docs/chunk12_spatial_visualization.md)).
+Heavy trainers (`train`, `sweep`, `train_ntu`, `train_widar`) are excluded from
+the no-arg default; `evaluate_widar` and `spatial` self-skip when their outputs
+exist or no BVP checkpoint has been trained yet, so reruns stay cheap.
 
 ```bash
 ./run_pipeline.sh                 # safe reproduction (uses the frozen checkpoint; skips train/sweep)

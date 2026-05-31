@@ -10,12 +10,14 @@ from __future__ import annotations
 import torch.nn as nn
 
 from .bilstm import BiLSTM
+from .bvp_cnn_rnn import BVPCNNRNN
 
-__all__ = ["BiLSTM", "MODELS", "build_model"]
+__all__ = ["BiLSTM", "BVPCNNRNN", "MODELS", "build_model"]
 
 # Registered model name -> class.  Add new architectures here.
 MODELS: dict[str, type[nn.Module]] = {
     "bilstm": BiLSTM,
+    "bvp_cnn_rnn": BVPCNNRNN,
 }
 
 
