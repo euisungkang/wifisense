@@ -54,9 +54,15 @@ Examples (from the repo root, with the project env active)::
 Timing probe: every split prints a **FULL-RUN TIME ESTIMATE** at the end,
 extrapolated from its measured per-epoch time (epoch 1 carries a one-time
 file-cache fill, reported separately; steady-state epochs drive the projection).
-To gauge a full run cheaply, run one split for a few epochs and read the estimate::
+To gauge a full run cheaply, probe one split for a few epochs. ``--probe`` makes
+the run timing-only — it writes **nothing**, so there is never anything to clean
+up afterwards::
 
-    python src/train_widar.py --split in_domain --epochs 4   # prints the projection
+    python src/train_widar.py --split in_domain --epochs 4 --probe
+
+Without ``--probe`` a normal run *overwrites* ``runs/best_bvp_<split>.pt`` each
+time, so real runs never need manual cleanup either; the only thing a probe used
+to leave behind (a half-trained checkpoint) is now suppressed entirely.
 
 Runnable via ``-m`` or directly (it prepends the repo root to sys.path itself).
 """
@@ -302,8 +308,10 @@ def run_split(split: str, args: argparse.Namespace, device: torch.device) -> dic
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     n_params = sum(p.numel() for p in model.parameters())
+    probe = args.probe
     run_dir = RUNS_ROOT / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{split}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    if not probe:
+        run_dir.mkdir(parents=True, exist_ok=True)
 
     held = (
         split_cfg.get("test_users")
@@ -312,7 +320,8 @@ def run_split(split: str, args: argparse.Namespace, device: torch.device) -> dic
         or f"{args.test_frac:.0%} random"
     )
     print(f"\n{'=' * 70}\nSPLIT: {split}   (held out: {held})")
-    print(f"Device: {device} | run dir: {run_dir.name} | params: {n_params/1e3:.0f}k")
+    where = "PROBE — nothing will be written" if probe else f"run dir: {run_dir.name}"
+    print(f"Device: {device} | {where} | params: {n_params/1e3:.0f}k")
     print(f"Train {len(train_ds)} | Val {len(val_ds)} | classes {n_classes}")
 
     history: list[dict] = []
@@ -335,16 +344,17 @@ def run_split(split: str, args: argparse.Namespace, device: torch.device) -> dic
         flag = ""
         if val_acc > best_val_acc:
             best_val_acc, best_epoch, epochs_no_improve, flag = val_acc, epoch, 0, " *"
-            torch.save({
-                "model_name": "bvp_cnn_rnn",
-                "model_config": model.config,
-                "state_dict": model.state_dict(),
-                "class_names": class_names,
-                "epoch": epoch,
-                "val_acc": val_acc,
-                "split_config": split_cfg,
-                "args": vars(args) | {"save_dir": str(run_dir)},
-            }, ckpt_path)
+            if not probe:  # a probe is timing-only: never persist a checkpoint
+                torch.save({
+                    "model_name": "bvp_cnn_rnn",
+                    "model_config": model.config,
+                    "state_dict": model.state_dict(),
+                    "class_names": class_names,
+                    "epoch": epoch,
+                    "val_acc": val_acc,
+                    "split_config": split_cfg,
+                    "args": vars(args) | {"save_dir": str(run_dir)},
+                }, ckpt_path)
         else:
             epochs_no_improve += 1
         print(
@@ -374,19 +384,24 @@ def run_split(split: str, args: argparse.Namespace, device: torch.device) -> dic
         "checkpoint": str(ckpt_path),
         "history": history,
     }
-    with open(run_dir / "metrics.json", "w") as f:
-        json.dump(summary, f, indent=2)
-    plot_curves(history, run_dir / "training_curves.png")
-
-    stable = RUNS_ROOT / f"best_bvp_{split}.pt"
-    shutil.copy2(ckpt_path, stable)
-    print(f"Best val acc {best_val_acc:.4f} @ epoch {best_epoch} -> {stable.name} "
-          f"({history[-1]['epoch']} epochs in {_fmt_dur(wall)})")
+    if probe:
+        print(f"[probe] {history[-1]['epoch']} epochs in {_fmt_dur(wall)} — "
+              "no checkpoint, run dir, or figure written.")
+        stable_path = None
+    else:
+        with open(run_dir / "metrics.json", "w") as f:
+            json.dump(summary, f, indent=2)
+        plot_curves(history, run_dir / "training_curves.png")
+        stable = RUNS_ROOT / f"best_bvp_{split}.pt"
+        shutil.copy2(ckpt_path, stable)
+        stable_path = str(stable)
+        print(f"Best val acc {best_val_acc:.4f} @ epoch {best_epoch} -> {stable.name} "
+              f"({history[-1]['epoch']} epochs in {_fmt_dur(wall)})")
 
     # Project the full multi-split run from this split's measured epoch times —
     # most useful when running one split as a quick partial timing probe.
     print_full_run_estimate(epoch_times, early_stopped, split, len(SPLITS))
-    return {"split": split, "best_val_acc": best_val_acc, "checkpoint": str(stable),
+    return {"split": split, "best_val_acc": best_val_acc, "checkpoint": stable_path,
             "wall_seconds": wall}
 
 
@@ -414,6 +429,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--val-frac", type=float, default=0.15, dest="val_frac")
     p.add_argument("--no-cache", dest="cache", action="store_false",
                    help="Disable the in-memory raw-volume cache (lower RAM, slower).")
+    p.add_argument("--probe", action="store_true",
+                   help="Timing-only run: train + print the FULL-RUN TIME ESTIMATE but "
+                        "persist NOTHING (no checkpoint, run dir, or figure), so no "
+                        "cleanup is ever needed. Pair with a small --epochs.")
     # Optimization.
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=1e-3)
@@ -476,10 +495,12 @@ def main() -> None:
     results = [run_split(s, args, device) for s in splits]
 
     total = sum(r["wall_seconds"] for r in results)
-    print(f"\n{'=' * 70}\nDONE — trained {len(results)} split(s) in {_fmt_dur(total)}:")
+    verb = "probed" if args.probe else "trained"
+    print(f"\n{'=' * 70}\nDONE — {verb} {len(results)} split(s) in {_fmt_dur(total)}:")
     for r in results:
+        dest = "(probe — not saved)" if r["checkpoint"] is None else f"-> {Path(r['checkpoint']).name}"
         print(f"  {r['split']:18} best val acc {r['best_val_acc']:.4f}  "
-              f"({_fmt_dur(r['wall_seconds'])})  -> {Path(r['checkpoint']).name}")
+              f"({_fmt_dur(r['wall_seconds'])})  {dest}")
     if len(results) < len(SPLITS):
         print(f"\n(ran {len(results)}/{len(SPLITS)} splits — see each split's "
               "FULL-RUN TIME ESTIMATE above to project a complete run.)")
