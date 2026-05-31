@@ -89,3 +89,35 @@ each one loads into a clean numeric tensor of known shape. The two datasets
 deliberately differ in format and hardware so downstream code has to normalize
 them into a consistent shape — which is exactly the reshaping at the end of
 each check function in `verify_setup.py`.
+
+## Widar3.0 BVP (chunk 10 — a different *kind* of input)
+
+UT-HAR and NTU-Fi are both **raw CSI**: the amplitude fingerprint of a specific
+room. Widar3.0 brings a fundamentally different input — **BVP (Body-coordinate
+Velocity Profile)**, a *derived, environment-invariant* feature. It is not CSI
+amplitude at all; it's an estimate of **how fast the body is moving and in which
+direction**, in the person's own coordinate frame, with the room/radios/facing
+factored out. This is the answer to the cross-domain collapse measured in
+[`chunk9_domain_shift.md`](chunk9_domain_shift.md).
+
+- **Hardware:** 1 Tx + **6 Intel 5300 receivers** (Tsinghua, MobiSys '19).
+- **Per-sample shape `(T, 20, 20)`:** a 20×20 velocity grid (`v_x` × `v_y`, both
+  ±2 m/s) per timestep, T timesteps at 10 Hz. **T varies** by gesture — so the
+  loader returns a *list* of arrays, not one stacked tensor.
+- **Storage:** one `.mat` per instance (`velocity_spectrum_ro`), nested under
+  `<date>-VS/[6-link/]<userN>/`. The filename `<userN>-a-b-c-d-…` encodes
+  gesture / position / orientation / repetition — but the gesture id `a` is
+  **date-dependent** (see below).
+- **Scale:** 43,658 instances; 22 gestures, 17 users, 8 positions, 5
+  orientations, 3 rooms — explicitly built for cross-user / -position /
+  -orientation / -room evaluation.
+
+**The label gotcha that bites everyone:** gesture id `a` means different gestures
+on different collection dates (id `4` is "Slide" on 2018-11-09 but "Draw-O" on
+2018-11-15), and on three dates it differs per user. `src/data/widar_loader.py`
+encodes the README's per-date tables and resolves every file to a name; filter by
+name, never by raw id.
+
+This is a *load-and-explore* chunk — no preprocessing or modeling. Details:
+[`chunk10_widar_bvp.md`](chunk10_widar_bvp.md); BVP physics and invariance:
+[`../notes/widar_data.md`](../notes/widar_data.md).

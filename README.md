@@ -14,10 +14,12 @@ wifi/
 │       │   └── UT_HAR/
 │       │       ├── data/        # X_train/val/test.csv (numpy binary, not text CSV)
 │       │       └── label/       # y_train/val/test.csv (numpy binary)
-│       └── ntu_fi_har/          # Secondary dataset (generalization check)
-│           └── NTU-Fi_HAR/
-│               ├── train_amp/   # .mat files, 6 activity subdirs
-│               └── test_amp/
+│       ├── ntu_fi_har/          # Secondary dataset (generalization check)
+│       │   └── NTU-Fi_HAR/
+│       │       ├── train_amp/   # .mat files, 6 activity subdirs
+│       │       └── test_amp/
+│       └── widar3/              # Widar3.0 BVP (chunk 10, cross-domain gestures)
+│           └── bvp/BVP/         # <date>-VS/[6-link/]<userN>/*.mat (20x20xT)
 ├── src/
 │   ├── data/                    # loader.py, preprocess.py
 │   ├── models/                  # bilstm.py + build_model registry
@@ -26,6 +28,8 @@ wifi/
 │   └── evaluate.py              # checkpoint evaluation (`python -m src.evaluate`)
 ├── scripts/
 │   ├── explore_data.py          # dataset characterization + sample dumps
+│   ├── explore_widar.py         # Widar3.0 BVP characterization (chunk 10)
+│   ├── visualize_widar_bvp.py   # BVP example grid -> figures/widar_bvp_examples.png
 │   ├── preprocess_data.py       # raw -> data/processed/ut_har/ut_har.npz
 │   ├── visualize_classes.py     # per-class CSI sanity grids
 │   ├── sweep.py                 # multi-seed robustness sweep over one config
@@ -48,6 +52,12 @@ wifi/
 |---------|--------|-----------|---------|-------|------|
 | UT-HAR | Intel 5300 | 1 x 250 x 90 | 7 (lie down, fall, walk, pickup, run, sit down, stand up) | 3977 | 500 (+496 val) |
 | NTU-Fi HAR | NTU-Fi | 3 x 114 x 500 | 6 (box, circle, clean, fall, run, walk) | 936 | 264 |
+| Widar3.0 BVP | Tsinghua (Intel 5300 ×6 Rx) | T x 20 x 20 (BVP, T varies) | 22 gestures (Push&Pull, Sweep, Clap, Slide, Draw-{O,N,Zigzag,…}, Draw-0…9) | 43,658 instances (17 users · 8 positions · 5 orientations · 3 rooms) | — |
+
+Widar3.0 (chunk 10) is a different kind of input: not raw CSI but **BVP
+(Body-coordinate Velocity Profile)** — an environment-invariant 2-D velocity
+representation. See [`docs/chunk10_widar_bvp.md`](docs/chunk10_widar_bvp.md) and
+[`notes/widar_data.md`](notes/widar_data.md).
 
 ### Downloading the raw data
 
@@ -74,9 +84,10 @@ cp -r /tmp/sensefi_data/Data/NTU-Fi_HAR  data/raw/ntu_fi_har/NTU-Fi_HAR
 rm -rf /tmp/sensefi_data
 ```
 
-> `gdown --folder` pulls everything in the drive (including the large Widar set
-> you don't need here). To grab only the two folders, open the Drive link in a
-> browser and download `UT_HAR` and `NTU-Fi_HAR` individually instead.
+> `gdown --folder` pulls everything in the drive (including the SenseFi
+> Widar variant, which is a *different*, fixed-size repackaging we don't use —
+> see below). To grab only the two folders, open the Drive link in a browser and
+> download `UT_HAR` and `NTU-Fi_HAR` individually instead.
 
 After copying, the layout must match the [Directory Layout](#directory-layout)
 above. Verify with:
@@ -84,6 +95,32 @@ above. Verify with:
 ```bash
 conda activate wifisense
 python verify_setup.py
+```
+
+### Downloading Widar3.0 BVP (chunk 10)
+
+The Widar3.0 **BVP** portion (~400 MB) comes straight from the official Tsinghua
+Cloud share, *not* from the SenseFi drive (SenseFi ships a fixed 22×20×20
+repackaging; we want the genuine variable-T BVP). It's gitignored like the rest.
+
+```bash
+mkdir -p data/raw/widar3/bvp
+BASE="https://cloud.tsinghua.edu.cn/d/2760bb9557ca4d09a74d/files/?p="
+
+# BVP volumes (~400 MB, 43.7k .mat files) + the dataset spec + extraction code
+curl -L "${BASE}/BVP/BVP.zip&dl=1"            -o data/raw/widar3/BVP.zip
+curl -L "${BASE}/README.pdf&dl=1"             -o data/raw/widar3/README.pdf
+curl -L "${BASE}/BVPExtractionCode.zip&dl=1"  -o data/raw/widar3/BVPExtractionCode.zip
+
+unzip -q data/raw/widar3/BVP.zip -d data/raw/widar3/bvp   # -> data/raw/widar3/bvp/BVP/...
+```
+
+Then explore it:
+
+```bash
+python scripts/explore_widar.py            # counts, T/value stats, label conventions
+python scripts/visualize_widar_bvp.py      # figures/widar_bvp_examples.png
+# or: ./run_pipeline.sh widar
 ```
 
 ## Environment

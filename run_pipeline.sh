@@ -269,14 +269,29 @@ stage_domainshift() {
     python scripts/domain_shift_matrix.py
 }
 
+# --- chunk 10: Widar3.0 BVP exploration --------------------------------------
+stage_widar() {
+    banner "CHUNK 10 — Widar3.0 BVP exploration (explore_widar.py + visualize_widar_bvp.py)"
+    # What: characterize the downloaded Widar3.0 BVP set (counts by gesture /
+    #       user / position / orientation, T and value stats, label conventions)
+    #       and render the 6-gesture × 4-timestep BVP example grid. No modeling —
+    #       this is the load+explore chunk (see notes/widar_data.md,
+    #       docs/chunk10_widar_bvp.md). Requires data/raw/widar3/bvp/ (download
+    #       BVP.zip per README.md; gitignored, ~400 MB / 43.7k files).
+    # Out:  stdout report + figures/widar_bvp_examples.png
+    local WIDAR_STATS_SAMPLE=3000   # files opened for T/value stats (0 = all; slow)
+    python scripts/explore_widar.py --sample "$WIDAR_STATS_SAMPLE"
+    python scripts/visualize_widar_bvp.py
+}
+
 # =============================================================================
 # DISPATCH
 # =============================================================================
 # Full ordered list (dependency order). Heavy/optional ones noted.
-ALL_STAGES=(verify explore preprocess visualize train sweep evaluate capture finalviz diagnose postprocess preprocess_ntu train_ntu domainshift)
+ALL_STAGES=(verify explore preprocess visualize train sweep evaluate capture finalviz diagnose postprocess preprocess_ntu train_ntu domainshift widar)
 # What a no-arg run does: the safe reproduction using the EXISTING frozen
 # checkpoints — skips only train/sweep/train_ntu (heavy, overwrite-y).
-DEFAULT_STAGES=(verify explore preprocess visualize evaluate capture finalviz diagnose postprocess preprocess_ntu domainshift)
+DEFAULT_STAGES=(verify explore preprocess visualize evaluate capture finalviz diagnose postprocess preprocess_ntu domainshift widar)
 
 case "${1:-}" in
     list)

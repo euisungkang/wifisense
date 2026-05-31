@@ -37,6 +37,7 @@ where it's invoked.
 | `preprocess_ntu` | 9 | `scripts/preprocess_ntu_fi.py` | `data/processed/ntu_fi/ntu_fi.npz` |
 | `train_ntu` | 9 | `scripts/sweep.py` | multi-seed NTU runs; promotes `runs/best_bilstm_ntu.pt` (**heavy**) |
 | `domainshift` | 9 | `cross_dataset_eval.py` + `domain_shift_matrix.py` | `figures/domain_shift_matrix.png`, cross metrics (see `chunk9_domain_shift.md`) |
+| `widar` | 10 | `scripts/explore_widar.py` + `scripts/visualize_widar_bvp.py` | Widar3.0 BVP stats (stdout), `figures/widar_bvp_examples.png` (see `chunk10_widar_bvp.md`) |
 
 ## Defaults and the heavy stages
 
@@ -44,8 +45,12 @@ A no-arg run executes `DEFAULT_STAGES`:
 
 ```
 verify → explore → preprocess → visualize → evaluate → capture → finalviz →
-diagnose → postprocess → preprocess_ntu → domainshift
+diagnose → postprocess → preprocess_ntu → domainshift → widar
 ```
+
+> **`widar` needs the Widar3.0 BVP download** (`data/raw/widar3/bvp/`, gitignored,
+> ~400 MB). Like the other data stages it errors out if the dataset isn't on
+> disk — see `README.md` for the download command.
 
 This is the **safe reproduction**: it uses the existing frozen checkpoints
 (`runs/best_bilstm.pt`, `runs/best_bilstm_ntu.pt`) and deliberately **skips
