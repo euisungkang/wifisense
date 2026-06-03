@@ -269,6 +269,23 @@ UNZIP_DISABLE_ZIPBOMB_DETECTION=TRUE unzip -q -o data/raw/mmfi_E01.zip \
 To instead keep **all** modalities (for RGB/depth sanity checks), drop the
 include-patterns: `... unzip -q -o data/raw/mmfi_E01.zip -d data/raw/mmfi/`.
 
+**Step 3 — verify the extraction, then DELETE the zip.** The per-env zips are
+huge (~18–21 GB each) and pure redundancy once extracted — don't let them linger
+in `data/raw/`. Verify first (so you never delete a good archive after a bad
+extract), *then* remove it:
+
+```bash
+# Verify: 80190 = 10 subjects × 27 actions × 297 frames (per environment).
+[ "$(find data/raw/mmfi/E01 -path '*/wifi-csi/*.mat' | wc -l)" = "80190" ] \
+  && [ "$(find data/raw/mmfi/E01 -name ground_truth.npy | wc -l)" = "270" ] \
+  && rm -v data/raw/mmfi_E01.zip \
+  || echo "Extraction INCOMPLETE — keeping the zip; re-extract before deleting."
+```
+
+This verify-then-`rm` is the standard cleanup for *every* environment (E02–E04
+follow the identical pattern — see `IMPROVEMENTS.md` §A). Keeping ~4.3 GB of
+extracted `wifi-csi` + `ground_truth` per env; throwing away the ~18 GB zip.
+
 After extraction the tree under `data/raw/mmfi/` is:
 
 ```

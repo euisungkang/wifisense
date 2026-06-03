@@ -11,13 +11,15 @@ import torch.nn as nn
 
 from .bilstm import BiLSTM
 from .bvp_cnn_rnn import BVPCNNRNN
+from .csi_pose_net import CSIPoseNet
 
-__all__ = ["BiLSTM", "BVPCNNRNN", "MODELS", "build_model"]
+__all__ = ["BiLSTM", "BVPCNNRNN", "CSIPoseNet", "MODELS", "build_model"]
 
 # Registered model name -> class.  Add new architectures here.
 MODELS: dict[str, type[nn.Module]] = {
     "bilstm": BiLSTM,
     "bvp_cnn_rnn": BVPCNNRNN,
+    "csi_pose_net": CSIPoseNet,
 }
 
 

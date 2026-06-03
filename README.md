@@ -70,6 +70,9 @@ through these:
 | 11 | [`docs/chunk11_bvp_pipeline.md`](docs/chunk11_bvp_pipeline.md) | BVP preprocessing transforms, the `Dataset`, the four cross-domain splits, optional CSI→BVP derivation |
 | 12 | [`docs/chunk12_spatial_visualization.md`](docs/chunk12_spatial_visualization.md) | BVP CNN-RNN gesture model, cross-domain evaluation vs. chunk 9, and the spatial-motion figure |
 | 13 | [`docs/chunk13_mmfi_setup.md`](docs/chunk13_mmfi_setup.md) | **Phase 3 — pose estimation (regression):** MM-Fi WiFi-CSI → 3D-pose loader, the 3D-skeleton primitive, and the first ground-truth human-pose figure |
+| 14 | [`docs/chunk14_pose_pipeline.md`](docs/chunk14_pose_pipeline.md) | The `(CSI window, 3D pose)` preprocessing + `Dataset`, cross-subject/-environment/random splits, and the temporal-alignment verification that proves pairs line up before training |
+| 15 | [`docs/chunk15_pose_model.md`](docs/chunk15_pose_model.md) | `CSIPoseNet` (CNN encoder + MLP head), the L1 + bone-length loss, MPJPE, and training the regressor (cross-subject E01: ~119 mm) |
+| 16 | [`docs/chunk16_pose_deliverable.md`](docs/chunk16_pose_deliverable.md) | **The capstone:** evaluation (MPJPE / PA-MPJPE per-joint, per-split) and the animated WiFi-predicted-vs-ground-truth 3D skeleton — plus where the model fails and where the field goes next |
 
 Supporting references: [`docs/datasets.md`](docs/datasets.md) /
 [`docs/data_summary.md`](docs/data_summary.md) (dataset details),
