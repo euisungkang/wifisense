@@ -370,16 +370,40 @@ stage_spatial() {
     python scripts/spatial_viz.py --dpi "$SP_DPI" --seed "$SP_SEED"
 }
 
+# --- chunk 13: MM-Fi pose dataset — census + ground-truth skeletons ----------
+stage_explore_mmfi() {
+    banner "CHUNK 13 — explore MM-Fi pose dataset (scripts/explore_mmfi.py)"
+    # What: Phase 3 (POSE ESTIMATION, a REGRESSION task — not classification).
+    #       Prints sample counts by env/subject/action and CSI + 3D-keypoint
+    #       shapes/ranges, then renders 8 ground-truth skeletons — the first time
+    #       the project shows real human poses.
+    # Out:  figures/mmfi_gt_skeletons.png
+    # Data: MM-Fi is NOT downloaded by this pipeline (large, Google Drive). See
+    #       docs/chunk13_mmfi_setup.md. When run DIRECTLY the script fails loudly
+    #       if data is missing; here we self-skip so the default reproduction run
+    #       doesn't break for users who haven't downloaded it.
+    if [ ! -d "data/raw/mmfi" ]; then
+        echo "data/raw/mmfi/ absent — MM-Fi not downloaded; skipping."
+        echo "  To enable: see docs/chunk13_mmfi_setup.md (start with E01)."
+        return 0
+    fi
+    if [ -f "figures/mmfi_gt_skeletons.png" ]; then
+        echo "figures/mmfi_gt_skeletons.png exists — skipping (delete to re-render)."
+        return 0
+    fi
+    python scripts/explore_mmfi.py
+}
+
 # =============================================================================
 # DISPATCH
 # =============================================================================
 # Full ordered list (dependency order). Heavy/optional ones noted.
-ALL_STAGES=(verify explore preprocess visualize train sweep evaluate capture finalviz diagnose postprocess preprocess_ntu train_ntu domainshift widar bvp train_widar evaluate_widar spatial)
+ALL_STAGES=(verify explore preprocess visualize train sweep evaluate capture finalviz diagnose postprocess preprocess_ntu train_ntu domainshift widar bvp train_widar evaluate_widar spatial explore_mmfi)
 # What a no-arg run does: the safe reproduction using the EXISTING frozen
 # checkpoints — skips only the heavy, overwrite-y trainers (train/sweep/train_ntu/
 # train_widar).  evaluate_widar and spatial are default-safe: they self-skip when
 # their outputs exist and no-op cleanly when no BVP checkpoint has been trained.
-DEFAULT_STAGES=(verify explore preprocess visualize evaluate capture finalviz diagnose postprocess preprocess_ntu domainshift widar bvp evaluate_widar spatial)
+DEFAULT_STAGES=(verify explore preprocess visualize evaluate capture finalviz diagnose postprocess preprocess_ntu domainshift widar bvp evaluate_widar spatial explore_mmfi)
 
 case "${1:-}" in
     list)

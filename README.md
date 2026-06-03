@@ -55,8 +55,10 @@ wifi/
 
 The project is built in numbered **chunks**; each leaves a focused write-up under
 [`docs/`](docs/). A reader landing here can follow the whole arc — raw-CSI
-activity recognition, the domain-shift problem, then the move to Widar3.0 BVP and
-environment-invariant gesture recognition — through these:
+activity recognition, the domain-shift problem, the move to Widar3.0 BVP and
+environment-invariant gesture recognition, and then the shift from
+classification to **3D human-pose estimation (regression)** with MM-Fi —
+through these:
 
 | Chunk | Doc | What it covers |
 |---|---|---|
@@ -67,6 +69,7 @@ environment-invariant gesture recognition — through these:
 | 10 | [`docs/chunk10_widar_bvp.md`](docs/chunk10_widar_bvp.md) | Widar3.0 BVP: the dataset, loader, and label conventions |
 | 11 | [`docs/chunk11_bvp_pipeline.md`](docs/chunk11_bvp_pipeline.md) | BVP preprocessing transforms, the `Dataset`, the four cross-domain splits, optional CSI→BVP derivation |
 | 12 | [`docs/chunk12_spatial_visualization.md`](docs/chunk12_spatial_visualization.md) | BVP CNN-RNN gesture model, cross-domain evaluation vs. chunk 9, and the spatial-motion figure |
+| 13 | [`docs/chunk13_mmfi_setup.md`](docs/chunk13_mmfi_setup.md) | **Phase 3 — pose estimation (regression):** MM-Fi WiFi-CSI → 3D-pose loader, the 3D-skeleton primitive, and the first ground-truth human-pose figure |
 
 Supporting references: [`docs/datasets.md`](docs/datasets.md) /
 [`docs/data_summary.md`](docs/data_summary.md) (dataset details),
